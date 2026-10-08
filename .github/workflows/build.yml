@@ -1,0 +1,44 @@
+name: build
+on:
+  workflow_dispatch:
+jobs:
+  pack:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '0.10'
+      - name: Pin npm registry to the release date (time machine)
+        run: npm config set registry "https://:2014-05-01T18%3A05%3A32.863Z@time-machines-npm.sealsecurity.io/"
+      - run: npm install
+      - name: Install libfaketime
+        run: sudo apt-get update && sudo apt-get install -y faketime
+      - name: Build dist (clock pinned to the 1.11.1 build time so the @DATE header and banner year match the release)
+        env:
+          TZ: UTC
+        run: faketime -f '@2014-05-01 17:42:00' ./node_modules/.bin/grunt build:*:* uglify dist:*
+      - name: Make the dist/cdn release copies (upstream build/release.js generateArtifacts, which jquery-release ran before npm publish)
+        run: |
+          npm install shelljs@0.2.6
+          node -e '
+            var Release = {
+              newVersion: require("./package.json").version,
+              preRelease: false,
+              exec: function() {},
+              complete: function() {},
+              define: function( props ) { for ( var k in props ) { Release[ k ] = props[ k ]; } }
+            };
+            require("./build/release.js")( Release );
+            Release.generateArtifacts(function( files ) { console.log( "release artifacts: " + files.join( " " ) ); });
+          '
+          ls -la dist/cdn
+      - name: Remove .github so it is not packed (.npmignore does not exclude it)
+        run: rm -rf .github
+      - run: npm pack
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jquery-npm
+          path: jquery-*.tgz
+          if-no-files-found: error

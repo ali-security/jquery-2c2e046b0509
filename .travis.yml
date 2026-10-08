@@ -1,3 +1,10 @@
 language: node_js
 node_js:
 - '0.10'
+addons:
+  chrome: stable
+script:
+- npm test
+- PHP_CLI_SERVER_WORKERS=4 php -S 127.0.0.1:8000 -t "$TRAVIS_BUILD_DIR" > /tmp/php-server.log 2>&1 &
+- sleep 2
+- (nvm install 18 && mkdir -p /tmp/qunit-runner && cd /tmp/qunit-runner && npm init -y >/dev/null && npm install puppeteer-core@21.11.0 && NODE_PATH=/tmp/qunit-runner/node_modules node "$TRAVIS_BUILD_DIR/.github/qunit/run-browser-tests.js" "http://127.0.0.1:8000/test/index.html")
